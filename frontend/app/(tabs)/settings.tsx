@@ -123,26 +123,30 @@ export default function SettingsScreen() {
         const [hour, minute] = notifTime.time.split(':').map(Number);
 
         try {
+          // Build notification content — title is the user's label name
           const notificationContent: any = {
-            title: notifTime.label,
+            title: `${notifTime.label}`,
             body: 'Time for your daily affirmations practice! ✨',
             sound: 'default',
             sticky: false,
             autoDismiss: true,
           };
 
-          // Android-specific content settings
+          // Android-specific: set priority and data
           if (Platform.OS === 'android') {
-            notificationContent.priority = Notifications.AndroidNotificationPriority?.MAX ?? 'max';
+            notificationContent.priority = Notifications.AndroidNotificationPriority?.HIGH ?? 'high';
+            // Setting the notification category helps Android display it correctly
+            notificationContent.categoryIdentifier = 'reminder';
           }
 
+          // Build trigger
           const trigger: any = {
             hour,
             minute,
             repeats: true,
           };
 
-          // Android-specific trigger settings
+          // Android: channelId MUST be in the trigger
           if (Platform.OS === 'android') {
             trigger.channelId = 'daily-reminders';
           }
@@ -164,7 +168,7 @@ export default function SettingsScreen() {
       const scheduled = await Notifications.getAllScheduledNotificationsAsync();
       console.log(`[Settings] Total scheduled notifications: ${scheduled.length}`);
       scheduled.forEach((n: any, i: number) => {
-        console.log(`  [${i}] id=${n.identifier}, content=`, JSON.stringify(n.content), 'trigger=', JSON.stringify(n.trigger));
+        console.log(`  [${i}] id=${n.identifier}, title="${n.content?.title}", body="${n.content?.body}", trigger=`, JSON.stringify(n.trigger));
       });
     } catch (e) {
       console.log('[Settings] Could not list scheduled notifications:', e);

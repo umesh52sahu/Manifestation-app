@@ -20,7 +20,7 @@ export default function RootLayout() {
           handleNotification: async () => ({
             shouldShowAlert: true,
             shouldPlaySound: true,
-            shouldSetBadge: true,
+            shouldSetBadge: false,
             shouldShowBanner: true,
             shouldShowList: true,
           }),
@@ -29,9 +29,10 @@ export default function RootLayout() {
 
         // Create Android notification channel
         if (Platform.OS === 'android') {
-          // Delete old channel if it exists (to reset any bad config)
+          // Delete old channel to reset any bad config
           try {
             await Notifications.deleteNotificationChannelAsync('daily-reminders');
+            console.log('[RootLayout] Deleted old notification channel');
           } catch (e) {
             // Channel didn't exist, that's fine
           }
@@ -43,11 +44,7 @@ export default function RootLayout() {
             vibrationPattern: [0, 250, 250, 250],
             sound: 'default',
             enableVibrate: true,
-            showBadge: true,
-            lockscreenVisibility: Notifications.AndroidNotificationVisibility?.PUBLIC,
-            bypassDnd: false,
-            enableLights: true,
-            lightColor: '#9370DB',
+            showBadge: false,
           });
           console.log('[RootLayout] Android notification channel "daily-reminders" created');
         }
