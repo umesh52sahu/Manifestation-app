@@ -13,19 +13,25 @@
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Add visualization images to your affirmations",
         "NSCameraUsageDescription": "Take photos for your affirmations"
-      }
+      },
+      "bundleIdentifier": "com.umesh52sahu.frontend"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "backgroundColor": "#E6E6FA"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
         "READ_MEDIA_IMAGES",
         "READ_EXTERNAL_STORAGE",
-        "CAMERA"
-      ]
+        "CAMERA",
+        "POST_NOTIFICATIONS",
+        "SCHEDULE_EXACT_ALARM",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "package": "com.umesh52sahu.frontend"
     },
     "web": {
       "bundler": "metro",
@@ -37,15 +43,29 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#000"
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "sounds": [],
+          "androidMode": "default"
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1ff3ed5b-1da5-4f4d-8d9b-724fb686fa7f"
+      }
     }
   }
 }

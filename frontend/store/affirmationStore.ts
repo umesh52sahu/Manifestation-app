@@ -2,6 +2,19 @@ import { create } from 'zustand';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+// Helper to safely parse JSON responses and throw on non-OK status
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Server error ${response.status}: ${text}`);
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`);
+  }
+}
+
 interface Affirmation {
   id: string;
   text: string;
@@ -41,17 +54,17 @@ interface AffirmationStore {
   dailyProgress: DailyProgress | null;
   settings: Settings | null;
   loading: boolean;
-  
+
   // Affirmation actions
   fetchAffirmations: () => Promise<void>;
   addAffirmation: (text: string) => Promise<void>;
   updateAffirmation: (id: string, data: { text?: string; order?: number }) => Promise<void>;
   deleteAffirmation: (id: string) => Promise<void>;
-  
+
   // Progress actions
   fetchTodayProgress: () => Promise<void>;
   markAffirmationComplete: (affirmationId: string) => Promise<void>;
-  
+
   // Settings actions
   fetchSettings: () => Promise<void>;
   updateSettings: (data: Partial<Settings>) => Promise<void>;
@@ -66,7 +79,7 @@ export const useAffirmationStore = create<AffirmationStore>((set, get) => ({
   fetchAffirmations: async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/affirmations`);
-      const data = await response.json();
+      const data = await parseJsonResponse<Affirmation[]>(response);
       set({ affirmations: data });
     } catch (error) {
       console.error('Failed to fetch affirmations:', error);
@@ -80,7 +93,7 @@ export const useAffirmationStore = create<AffirmationStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, image }),
       });
-      const newAffirmation = await response.json();
+      const newAffirmation = await parseJsonResponse<Affirmation>(response);
       set((state) => ({
         affirmations: [...state.affirmations, newAffirmation],
       }));
@@ -97,7 +110,7 @@ export const useAffirmationStore = create<AffirmationStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      const updatedAffirmation = await response.json();
+      const updatedAffirmation = await parseJsonResponse<Affirmation>(response);
       set((state) => ({
         affirmations: state.affirmations.map((aff) =>
           aff.id === id ? updatedAffirmation : aff
@@ -126,7 +139,7 @@ export const useAffirmationStore = create<AffirmationStore>((set, get) => ({
   fetchTodayProgress: async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/progress/today`);
-      const data = await response.json();
+      const data = await parseJsonResponse<DailyProgress>(response);
       set({ dailyProgress: data });
     } catch (error) {
       console.error('Failed to fetch progress:', error);
@@ -141,9 +154,9 @@ export const useAffirmationStore = create<AffirmationStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: today, affirmation_id: affirmationId }),
       });
-      const data = await response.json();
+      const data = await parseJsonResponse<DailyProgress>(response);
       set({ dailyProgress: data });
-      
+
       // Refresh settings to update streak
       await get().fetchSettings();
     } catch (error) {
@@ -155,7 +168,7 @@ export const useAffirmationStore = create<AffirmationStore>((set, get) => ({
   fetchSettings: async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/settings`);
-      const data = await response.json();
+      const data = await parseJsonResponse<Settings>(response);
       set({ settings: data });
     } catch (error) {
       console.error('Failed to fetch settings:', error);
@@ -169,7 +182,7 @@ export const useAffirmationStore = create<AffirmationStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      const updatedSettings = await response.json();
+      const updatedSettings = await parseJsonResponse<Settings>(response);
       set({ settings: updatedSettings });
     } catch (error) {
       console.error('Failed to update settings:', error);

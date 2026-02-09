@@ -14,17 +14,10 @@ import { useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Notifications from 'expo-notifications';
 import { useAffirmationStore } from '../../store/affirmationStore';
+import { getNotificationsModule } from '../../utils/notifications';
 
-// Configure notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+let Notifications: any = null;
 
 interface NotificationTime {
   id: string;
@@ -42,10 +35,21 @@ export default function SettingsScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [selectedTime, setSelectedTime] = useState(new Date());
+  const [notificationsReady, setNotificationsReady] = useState(false);
 
   useEffect(() => {
-    loadSettings();
-    checkNotificationPermissions();
+    const init = async () => {
+      Notifications = await getNotificationsModule();
+      setNotificationsReady(!!Notifications);
+      if (Notifications) {
+        console.log('[Settings] Notifications module loaded');
+      } else {
+        console.log('[Settings] Notifications module NOT available');
+      }
+      await loadSettings();
+      await checkNotificationPermissions();
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -61,16 +65,29 @@ export default function SettingsScreen() {
   };
 
   const checkNotificationPermissions = async () => {
+    if (!Notifications) {
+      setNotificationsEnabled(false);
+      return;
+    }
     const { status } = await Notifications.getPermissionsAsync();
+    console.log('[Settings] Current permission status:', status);
     if (status !== 'granted') {
       setNotificationsEnabled(false);
     }
   };
 
   const handleToggleNotifications = async (value: boolean) => {
+    if (!Notifications) {
+      Alert.alert(
+        'Not Available',
+        'Push notifications are not supported in Expo Go. Please use a development build.'
+      );
+      return;
+    }
+
     if (value) {
-      // Request permissions
       const { status } = await Notifications.requestPermissionsAsync();
+      console.log('[Settings] Permission request result:', status);
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Notification permissions are required to set reminders.');
         return;
@@ -81,33 +98,76 @@ export default function SettingsScreen() {
     await updateSettings({ notifications_enabled: value });
 
     if (value) {
-      scheduleAllNotifications();
+      await scheduleAllNotifications(notificationTimes);
     } else {
       await Notifications.cancelAllScheduledNotificationsAsync();
+      console.log('[Settings] All notifications cancelled');
     }
   };
 
-  const scheduleAllNotifications = async () => {
-    // Cancel existing notifications
-    await Notifications.cancelAllScheduledNotificationsAsync();
+  const scheduleAllNotifications = async (timesToSchedule?: NotificationTime[]) => {
+    if (!Notifications) {
+      console.log('[Settings] Notifications module not available, skipping schedule');
+      return;
+    }
 
-    // Schedule all enabled notification times
-    for (const notifTime of notificationTimes) {
+    const times = timesToSchedule || notificationTimes;
+
+    // Cancel all existing scheduled notifications
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    console.log('[Settings] Cancelled all existing notifications');
+
+    // Schedule each enabled notification time
+    for (const notifTime of times) {
       if (notifTime.enabled) {
         const [hour, minute] = notifTime.time.split(':').map(Number);
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `${notifTime.label} Reminder ✨`,
-            body: 'Time for your daily affirmations practice!',
-            sound: true,
-          },
-          trigger: {
+
+        try {
+          const notificationContent: any = {
+            title: notifTime.label,
+            body: 'Time for your daily affirmations practice! ✨',
+            sound: 'default',
+            sticky: false,
+            autoDismiss: true,
+          };
+
+          // Android-specific content settings
+          if (Platform.OS === 'android') {
+            notificationContent.priority = Notifications.AndroidNotificationPriority?.MAX ?? 'max';
+          }
+
+          const trigger: any = {
             hour,
             minute,
             repeats: true,
-          },
-        });
+          };
+
+          // Android-specific trigger settings
+          if (Platform.OS === 'android') {
+            trigger.channelId = 'daily-reminders';
+          }
+
+          const id = await Notifications.scheduleNotificationAsync({
+            content: notificationContent,
+            trigger,
+          });
+
+          console.log(`[Settings] Scheduled "${notifTime.label}" at ${hour}:${String(minute).padStart(2, '0')}, id: ${id}`);
+        } catch (error) {
+          console.error(`[Settings] Failed to schedule "${notifTime.label}":`, error);
+        }
       }
+    }
+
+    // Debug: log all scheduled notifications
+    try {
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      console.log(`[Settings] Total scheduled notifications: ${scheduled.length}`);
+      scheduled.forEach((n: any, i: number) => {
+        console.log(`  [${i}] id=${n.identifier}, content=`, JSON.stringify(n.content), 'trigger=', JSON.stringify(n.trigger));
+      });
+    } catch (e) {
+      console.log('[Settings] Could not list scheduled notifications:', e);
     }
   };
 
@@ -117,9 +177,9 @@ export default function SettingsScreen() {
     );
     setNotificationTimes(updatedTimes);
     await updateSettings({ notification_times: updatedTimes });
-    
+
     if (notificationsEnabled) {
-      scheduleAllNotifications();
+      await scheduleAllNotifications(updatedTimes);
     }
   };
 
@@ -136,9 +196,9 @@ export default function SettingsScreen() {
             const updatedTimes = notificationTimes.filter((nt) => nt.id !== id);
             setNotificationTimes(updatedTimes);
             await updateSettings({ notification_times: updatedTimes });
-            
+
             if (notificationsEnabled) {
-              scheduleAllNotifications();
+              await scheduleAllNotifications(updatedTimes);
             }
           },
         },
@@ -146,7 +206,7 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleAddNotificationTime = () => {
+  const handleAddNotificationTime = async () => {
     if (!newLabel.trim()) {
       Alert.alert('Error', 'Please enter a label for this notification');
       return;
@@ -159,16 +219,16 @@ export default function SettingsScreen() {
     const newNotification: NotificationTime = {
       id: `notif_${Date.now()}`,
       time: timeString,
-      label: newLabel,
+      label: newLabel.trim(),
       enabled: true,
     };
 
     const updatedTimes = [...notificationTimes, newNotification];
     setNotificationTimes(updatedTimes);
-    updateSettings({ notification_times: updatedTimes });
+    await updateSettings({ notification_times: updatedTimes });
 
     if (notificationsEnabled) {
-      scheduleAllNotifications();
+      await scheduleAllNotifications(updatedTimes);
     }
 
     setShowAddModal(false);
@@ -207,7 +267,7 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
@@ -243,16 +303,16 @@ export default function SettingsScreen() {
             {notificationsEnabled && (
               <>
                 <View style={styles.divider} />
-                
+
                 {/* Notification Times List */}
                 {notificationTimes.map((notifTime) => (
                   <View key={notifTime.id}>
                     <View style={styles.notificationTimeRow}>
                       <View style={styles.timeContent}>
-                        <Ionicons 
-                          name={notifTime.enabled ? "notifications" : "notifications-off"} 
-                          size={24} 
-                          color={notifTime.enabled ? "#9370DB" : "#CCC"} 
+                        <Ionicons
+                          name={notifTime.enabled ? "notifications" : "notifications-off"}
+                          size={24}
+                          color={notifTime.enabled ? "#9370DB" : "#CCC"}
                         />
                         <View style={styles.timeInfo}>
                           <Text style={styles.timeLabel}>{notifTime.label}</Text>
@@ -264,10 +324,10 @@ export default function SettingsScreen() {
                           onPress={() => handleToggleNotificationTime(notifTime.id)}
                           style={styles.timeActionButton}
                         >
-                          <Ionicons 
-                            name={notifTime.enabled ? "checkmark-circle" : "checkmark-circle-outline"} 
-                            size={24} 
-                            color={notifTime.enabled ? "#4CAF50" : "#CCC"} 
+                          <Ionicons
+                            name={notifTime.enabled ? "checkmark-circle" : "checkmark-circle-outline"}
+                            size={24}
+                            color={notifTime.enabled ? "#4CAF50" : "#CCC"}
                           />
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -359,10 +419,10 @@ export default function SettingsScreen() {
 
         {/* Inspirational Quote */}
         <View style={styles.quoteCard}>
-          <Ionicons name="quote" size={32} color="#9370DB" />
+          <Ionicons name="chatbubble-outline" size={32} color="#9370DB" />
           <Text style={styles.quoteText}>
-            "What you think, you become. What you feel, you attract.
-            What you imagine, you create."
+            &quot;What you think, you become. What you feel, you attract.
+            What you imagine, you create.&quot;
           </Text>
           <Text style={styles.quoteAuthor}>- Buddha</Text>
         </View>

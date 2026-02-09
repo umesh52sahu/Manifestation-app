@@ -36,14 +36,14 @@ function AffirmationItem({ item, index, onEdit, onDelete }: AffirmationItemProps
       friction: 8,
       useNativeDriver: true,
     }).start();
-  }, [index]);
+  }, [index, scaleAnim]);
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <View style={styles.affirmationCard}>
         {item.image && (
-          <Image 
-            source={{ uri: item.image }} 
+          <Image
+            source={{ uri: item.image }}
             style={styles.thumbnailImage}
             resizeMode="cover"
           />
@@ -129,9 +129,9 @@ export default function HomeScreen() {
 
     try {
       if (editingAffirmation) {
-        await updateAffirmation(editingAffirmation.id, { 
+        await updateAffirmation(editingAffirmation.id, {
           text: affirmationText,
-          image: selectedImage 
+          image: selectedImage || undefined
         });
       } else {
         await addAffirmation(affirmationText, selectedImage || undefined);
@@ -188,7 +188,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -257,12 +257,12 @@ export default function HomeScreen() {
               <Text style={styles.imageSectionTitle}>Visualization Image (Optional)</Text>
               {selectedImage ? (
                 <View style={styles.imagePreviewContainer}>
-                  <Image 
-                    source={{ uri: selectedImage }} 
+                  <Image
+                    source={{ uri: selectedImage }}
                     style={styles.imagePreview}
                     resizeMode="cover"
                   />
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.removeImageButton}
                     onPress={removeImage}
                   >
